@@ -586,7 +586,6 @@ impl From<LiteralRef<'_>> for EncodedTerm {
             // stored as typed literals so that they are given back as written.
             _ => value_encoding(value, datatype)
                 .filter(|term| decodes_to_literal(term, value, datatype)),
-            _ => None,
         };
         match native_encoding {
             Some(term) => term,
