@@ -871,6 +871,29 @@ fn test_non_canonical_literals_keep_their_value_in_sparql() -> Result<(), Box<dy
         1
     );
     assert_eq!(count("SELECT ?s WHERE { ?s ?p 4 }")?, 1);
+    // DATATYPE and STR read the term as written
+    assert_eq!(
+        count(
+            "SELECT ?o WHERE { ?s ?p ?o FILTER(DATATYPE(?o) = <http://www.w3.org/2001/XMLSchema#nonNegativeInteger>) }"
+        )?,
+        1
+    );
+    assert_eq!(
+        count(
+            "SELECT ?o WHERE { ?s ?p ?o FILTER(DATATYPE(?o) = <http://www.w3.org/2001/XMLSchema#dateTimeStamp>) }"
+        )?,
+        1
+    );
+    assert_eq!(
+        count(
+            "SELECT ?o WHERE { ?s ?p ?o FILTER(DATATYPE(?o) = <http://www.w3.org/2001/XMLSchema#integer>) }"
+        )?,
+        2
+    );
+    assert_eq!(
+        count("SELECT ?o WHERE { ?s ?p ?o FILTER(STR(?o) = \"4.0\") }")?,
+        1
+    );
     // The effective boolean value of a value is the value's, whatever its form
     assert_eq!(
         count(
