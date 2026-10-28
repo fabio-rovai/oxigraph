@@ -558,49 +558,68 @@ pub fn build_expression_evaluator<'a, C: ExpressionEvaluatorContext<'a>>(
                 })
             }
             Function::Datatype => {
-                let e = build_expression_evaluator(&parameters[0], context)?;
-                Rc::new(move |tuple| {
-                    Some(ExpressionTerm::NamedNode(match e(tuple)? {
-                        ExpressionTerm::StringLiteral(_) => xsd::STRING.into(),
-                        ExpressionTerm::LangStringLiteral { .. } => rdf::LANG_STRING.into(),
-                        #[cfg(feature = "sparql-12")]
-                        ExpressionTerm::DirLangStringLiteral { .. } => rdf::DIR_LANG_STRING.into(),
-                        ExpressionTerm::BooleanLiteral(_) => xsd::BOOLEAN.into(),
-                        ExpressionTerm::IntegerLiteral(_) => xsd::INTEGER.into(),
-                        ExpressionTerm::DecimalLiteral(_) => xsd::DECIMAL.into(),
-                        ExpressionTerm::FloatLiteral(_) => xsd::FLOAT.into(),
-                        ExpressionTerm::DoubleLiteral(_) => xsd::DOUBLE.into(),
-                        ExpressionTerm::DateTimeLiteral(_) => xsd::DATE_TIME.into(),
-                        #[cfg(feature = "sep-0002")]
-                        ExpressionTerm::DateLiteral(_) => xsd::DATE.into(),
-                        #[cfg(feature = "sep-0002")]
-                        ExpressionTerm::TimeLiteral(_) => xsd::TIME.into(),
-                        #[cfg(feature = "calendar-ext")]
-                        ExpressionTerm::GYearLiteral(_) => xsd::G_YEAR.into(),
-                        #[cfg(feature = "calendar-ext")]
-                        ExpressionTerm::GYearMonthLiteral(_) => xsd::G_YEAR_MONTH.into(),
-                        #[cfg(feature = "calendar-ext")]
-                        ExpressionTerm::GMonthLiteral(_) => xsd::G_MONTH.into(),
-                        #[cfg(feature = "calendar-ext")]
-                        ExpressionTerm::GMonthDayLiteral(_) => xsd::G_MONTH_DAY.into(),
-                        #[cfg(feature = "calendar-ext")]
-                        ExpressionTerm::GDayLiteral(_) => xsd::G_DAY.into(),
-                        #[cfg(feature = "sep-0002")]
-                        ExpressionTerm::DurationLiteral(_) => xsd::DURATION.into(),
-                        #[cfg(feature = "sep-0002")]
-                        ExpressionTerm::YearMonthDurationLiteral(_) => {
-                            xsd::YEAR_MONTH_DURATION.into()
-                        }
-                        #[cfg(feature = "sep-0002")]
-                        ExpressionTerm::DayTimeDurationLiteral(_) => xsd::DAY_TIME_DURATION.into(),
-                        ExpressionTerm::OtherTypedLiteral { datatype, .. } => datatype,
-                        ExpressionTerm::NamedNode(_) | ExpressionTerm::BlankNode(_) => {
-                            return None;
-                        }
-                        #[cfg(feature = "sparql-12")]
-                        ExpressionTerm::Triple(_) => return None,
-                    }))
-                })
+                if let Some(e) = try_build_internal_expression_evaluator(&parameters[0], context)? {
+                    // As STR: read the term itself, so a derived datatype such as
+                    // xsd:nonNegativeInteger is not reported as the primitive one
+                    // its value is parsed into
+                    let externalize = context.build_externalize_term();
+                    Rc::new(move |tuple| {
+                        Some(ExpressionTerm::NamedNode(match externalize(e(tuple)?)? {
+                            Term::Literal(term) => term.datatype().into_owned(),
+                            Term::NamedNode(_) | Term::BlankNode(_) => return None,
+                            #[cfg(feature = "sparql-12")]
+                            Term::Triple(_) => return None,
+                        }))
+                    })
+                } else {
+                    let e = build_expression_evaluator(&parameters[0], context)?;
+                    Rc::new(move |tuple| {
+                        Some(ExpressionTerm::NamedNode(match e(tuple)? {
+                            ExpressionTerm::StringLiteral(_) => xsd::STRING.into(),
+                            ExpressionTerm::LangStringLiteral { .. } => rdf::LANG_STRING.into(),
+                            #[cfg(feature = "sparql-12")]
+                            ExpressionTerm::DirLangStringLiteral { .. } => {
+                                rdf::DIR_LANG_STRING.into()
+                            }
+                            ExpressionTerm::BooleanLiteral(_) => xsd::BOOLEAN.into(),
+                            ExpressionTerm::IntegerLiteral(_) => xsd::INTEGER.into(),
+                            ExpressionTerm::DecimalLiteral(_) => xsd::DECIMAL.into(),
+                            ExpressionTerm::FloatLiteral(_) => xsd::FLOAT.into(),
+                            ExpressionTerm::DoubleLiteral(_) => xsd::DOUBLE.into(),
+                            ExpressionTerm::DateTimeLiteral(_) => xsd::DATE_TIME.into(),
+                            #[cfg(feature = "sep-0002")]
+                            ExpressionTerm::DateLiteral(_) => xsd::DATE.into(),
+                            #[cfg(feature = "sep-0002")]
+                            ExpressionTerm::TimeLiteral(_) => xsd::TIME.into(),
+                            #[cfg(feature = "calendar-ext")]
+                            ExpressionTerm::GYearLiteral(_) => xsd::G_YEAR.into(),
+                            #[cfg(feature = "calendar-ext")]
+                            ExpressionTerm::GYearMonthLiteral(_) => xsd::G_YEAR_MONTH.into(),
+                            #[cfg(feature = "calendar-ext")]
+                            ExpressionTerm::GMonthLiteral(_) => xsd::G_MONTH.into(),
+                            #[cfg(feature = "calendar-ext")]
+                            ExpressionTerm::GMonthDayLiteral(_) => xsd::G_MONTH_DAY.into(),
+                            #[cfg(feature = "calendar-ext")]
+                            ExpressionTerm::GDayLiteral(_) => xsd::G_DAY.into(),
+                            #[cfg(feature = "sep-0002")]
+                            ExpressionTerm::DurationLiteral(_) => xsd::DURATION.into(),
+                            #[cfg(feature = "sep-0002")]
+                            ExpressionTerm::YearMonthDurationLiteral(_) => {
+                                xsd::YEAR_MONTH_DURATION.into()
+                            }
+                            #[cfg(feature = "sep-0002")]
+                            ExpressionTerm::DayTimeDurationLiteral(_) => {
+                                xsd::DAY_TIME_DURATION.into()
+                            }
+                            ExpressionTerm::OtherTypedLiteral { datatype, .. } => datatype,
+                            ExpressionTerm::NamedNode(_) | ExpressionTerm::BlankNode(_) => {
+                                return None;
+                            }
+                            #[cfg(feature = "sparql-12")]
+                            ExpressionTerm::Triple(_) => return None,
+                        }))
+                    })
+                }
             }
             Function::Iri => {
                 let e = build_expression_evaluator(&parameters[0], context)?;
