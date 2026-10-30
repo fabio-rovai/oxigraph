@@ -9,7 +9,7 @@ use oxigraph::model::dataset::CanonicalizationAlgorithm;
 use oxigraph::model::vocab::rdf;
 use oxigraph::model::{
     BlankNode, BlankNodeRef, Dataset, Graph, GraphName, GraphNameRef, Literal, LiteralRef,
-    NamedNode, Term, TermRef, Triple, TripleRef, Variable,
+    NamedNode, Term, TermRef, TripleRef, Variable,
 };
 use oxigraph::sparql::QueryResults;
 use oxigraph::sparql::results::{
@@ -17,7 +17,9 @@ use oxigraph::sparql::results::{
 };
 use oxigraph::store::Store;
 use oxiri::Iri;
-use spareval::{DefaultServiceHandler, QueryEvaluationError, QueryEvaluator, QuerySolutionIter};
+use spareval::{
+    DefaultServiceHandler, ExpressionTerm, QueryEvaluationError, QueryEvaluator, QuerySolutionIter,
+};
 use spargebra::algebra::GraphPattern;
 use spargebra::{Query, SparqlParser};
 use spargeo::GEOSPARQL_EXTENSION_FUNCTIONS;
@@ -523,15 +525,16 @@ impl StaticQueryResults {
     }
 
     fn from_graph(graph: &Graph) -> Result<Self> {
-        // Hack to normalize literals
-        let store = Store::new()?;
-        for t in graph {
-            store.insert(t.in_graph(GraphNameRef::DefaultGraph))?;
-        }
-        let mut graph = store
+        // Literals are compared by value: "1.0"^^xsd:decimal and "1"^^xsd:decimal
+        // are the same result. The store no longer normalizes them, so do it here.
+        let mut graph = graph
             .iter()
-            .map(|q| Ok(Triple::from(q?)))
-            .collect::<Result<Graph>>()?;
+            .map(|t| {
+                let mut t = t.into_owned();
+                t.object = Term::from(ExpressionTerm::from(t.object));
+                t
+            })
+            .collect::<Graph>();
 
         if let Some(result_set) = graph.subject_for_predicate_object(rdf::TYPE, rs::RESULT_SET) {
             if let Some(bool) = graph.object_for_subject_predicate(result_set, rs::BOOLEAN) {
